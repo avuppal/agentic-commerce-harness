@@ -27,17 +27,12 @@ agentic-commerce-harness/
 ├── docs/                          # Core subsystem specifications
 │   ├── benchmarks/                # Performance & defense test suite specs
 │   ├── data_models/               # GS1 schema mapping documentation
-│   ├── deployment/                # Multi-region HA setup strategy
 │   ├── discovery/                 # Digital Link resolution rules
 │   ├── dpp_parser/                # DPP JSON-LD specs
 │   ├── payments/                  # Secure payment token handshakes
 │   ├── security/                  # W3C sandbox isolation rules
 │   ├── sige/                      # NLP query translation rules
 │   └── ds_adapter/                # MCP and dual-surface adapter specs
-├── infrastructure/
-│   └── deployment/
-│       ├── high_availability_config.yaml  # Multi-region DNS & LB variables
-│       └── multi_region_setup.sh          # Cluster & sandbox deployment setup
 ├── src/                           # Codebase Core
 │   ├── approval_manager/
 │   │   └── approval_trigger.py    # Automated spend/trust approval gates
@@ -53,7 +48,7 @@ agentic-commerce-harness/
 │   │   ├── dpp_handler.py         # Extracts Recycled %, CO2e, and Repair indexes
 │   │   └── dpp_models.py          # Represents DPP Pydantic structures
 │   ├── ds_adapter/
-│   │   ├── mcp_endpoints.py       # Model Context Protocol tools for AI Agents
+│   │   ├── mcp_endpoints.py       # Model Context Protocol tools & Web Simulator
 │   │   └── ui_renderer.py         # Dynamic visual PDP HTML generator
 │   ├── payments/
 │   │   └── token_handler.py       # Generates delegated single-use cryptographic tokens
@@ -77,23 +72,30 @@ agentic-commerce-harness/
 
 ---
 
-## 🛠️ Main Modules & Subsystems
+## 🐋 Running via Docker (Simplest Setup)
 
-### 1. Semantic Intent Grounding Engine (SIGE)
-SIGE translates vague, human-centric intents (e.g. *"USDA Organic Gluten-Free oat milk"*) into a machine-grounded, verified query against master attributes, utilizing `unit_price_normalizer.py` to compare net contents mathematically and determine exact price-per-unit metrics.
+We have fully containerized the application so you can build and run it with a single command without worrying about local Python setups:
 
-### 2. Security, Policy & Guardrails Engine (SPGE)
-SPGE executes sandboxed operations to secure transactions:
-* **Spend limits:** Hard caps on USD equivalent purchases.
-* **Velocity controls:** Transaction limits based on frequency, categories, and merchant domains.
-* **Prompt Injection Shield:** Neutralizes malicious instructions embedded within untrusted descriptions.
-* **Tokenized Isolation:** Generates delegated single-use cryptographic tokens to prevent raw card exposure.
+### 1. Build and Run the Container
+Using Docker Compose:
+```bash
+docker-compose up --build
+```
+*Or using the raw Docker CLI:*
+```bash
+docker build -t commerce-harness .
+docker run -p 8000:8000 commerce-harness
+```
 
-### 3. Dual-Surface Adapter (DS-Adapter)
-Exposes dual surfaces depending on who is performing the request:
-* **Machine Surface (REQ-DS-01):** High-speed FastAPI server exposing Model Context Protocol (MCP) tools directly to LLM agents. Returns unstyled JSON-LD.
-* **Human Surface (REQ-DS-02):** Dynamic HTML-rendering engine compiling rich visual PDPs (Product Detail Pages) for review.
-* **Step-Up Gates (REQ-DS-03):** Automatically halts agent execution and triggers visual human oversight if transaction limits are breached, claims lack 100% verifiability, or vendor domains are untrusted.
+### 2. Access the Interactive Side-by-Side Web Demo
+Once the container is running, navigate to:
+```
+http://localhost:8000/demo
+```
+This is a beautiful, interactive dashboard demonstrating:
+- **Scenario A: Unit Price Grounding** (How the normalizer performs math to select cost-effective bulk sizes over fuzzy standard scraper errors).
+- **Scenario B: Claim Fraud (Greenwashing)** (How the W3C VC validator automatically flags and blocks unverified ecological claims).
+- **Scenario C: Indirect Prompt Injection** (How the SPGE payload sanitizer strips out malicious instructions hidden in descriptions).
 
 ---
 
@@ -101,7 +103,7 @@ Exposes dual surfaces depending on who is performing the request:
 
 The built-in evaluation framework (`eval-harness`) tests intent matching, security compliance, claim verifiability, and execution latencies.
 
-### Run the Suite
+### Run the Suite Locally
 You can execute all benchmark suites using Python's standard unittest runner:
 ```bash
 python3 -m unittest discover -s tests/benchmarks -p "*_benchmark.py"
@@ -110,12 +112,3 @@ python3 -m unittest discover -s tests/benchmarks -p "*_benchmark.py"
 ### Verified Performance SLA:
 * **W3C Cryptographic Proof Validation SLA Target:** `< 15.00 ms`
 * **Harness Benchmark Performance Result:** **`0.29 ms` per validation (50x faster than target SLA!)**
-
----
-
-## ⚙️ Active-Active Deployment Specs
-
-The platform compiles with a **99.99% operational SLA** through:
-* **Dual-Region Deployment:** Configured across `us-east-1` and `us-west-2` via Route53 Latency-based Routing with a failover health-check TTL of 10s.
-* **Multi-Master Sync:** Utilizing active replication across regional clusters to ensure real-time W3C VC and DPP state synchronization.
-* **W3C Container Isolation:** strict zero execution of external scripts, guaranteeing zero-JS injection profiles within runtime containers.

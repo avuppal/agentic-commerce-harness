@@ -1,0 +1,11 @@
+version: '3.8'
+
+services:
+  harness:
+    build: .
+    container_name: commerce-harness
+    ports:
+      - "8000:8000"
+    environment:
+      - PYTHONUNBUFFERED=1
+    restart: always
