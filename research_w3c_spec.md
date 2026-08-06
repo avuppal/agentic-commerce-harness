@@ -127,4 +127,25 @@ Sorts the remaining compliant candidates using the propensity models, prioritizi
 
 #### Step 5: Explainability (XAI) Generation
 The agent must generate an audit-ready, natural-language explanation of its action:
-* *Example Output:* `"Product A was shortlisted because it represents the lowest unit cost ($0.62/oz) and has a 100% verified USDA Organic certification from issuer did:key:123. Product B was rejected because its organic claim had no cryptographic verification (Greenwashing Flag)."*
+* *Example Output:* `"Product A was shortlisted because it represents the lowest unit cost ($0.62/oz) and has a 100% verified USDA Organic certification from issuer did:key:123. Product B was rejected because its organic claim had no cryptographic verification (Greenwashing Flag)."`
+
+---
+
+## 5. Practical Application: How Agents Capture Human Intent
+
+To bridge human desires with autonomous execution, the agent captures and refines intent across three operational layers:
+
+### A. Explicit Grounding Layer (Stated Intent)
+- **Concept:** Translating human natural-language statements into structured schema constraints.
+- **Workflow:** When a user prompts the agent, the NLP pipeline translates phrases (e.g. "for my daughter's allergy") into strict filters in the metadata model (e.g. `gs1:allergenInformation = FREE_FROM:Nuts`). This prevents the agent from evaluating non-compliant options, ensuring immediate alignment with stated constraints.
+
+### B. Implicit Telemetry Layer (Digital Body Language)
+- **Concept:** Detecting unstated user priorities (urgency, hesitation, interest level) from action patterns.
+- **Workflow:** The harness continuously calculates the product's Propensity Score ($P_{intent}$) based on clickstream, scroll speeds, and page refresh velocities. The agent queries this score via MCP:
+  - *High Velocity Triggers* signify high urgency $\rightarrow$ The agent automatically prioritizes immediate shipping speeds over minor price variances.
+  - *Friction/Cancellation Hovers* signify hesitation $\rightarrow$ The agent automatically exposes warranty information or shifts focus to lower-cost trust models.
+
+### C. Interactive Alignment Layer (The Refinement Loop)
+- **Concept:** Gracefully resolving ambiguity when intent vectors conflict.
+- **Workflow:** When the agent's decision confidence falls below the $90\%$ autonomous threshold (e.g. choosing between a cheap unverified option vs. a premium organic certified option), it halts execution. The DS-Adapter triggers a visual visual PDP step-up gate. When the human selects an option, the agent commits the preference to its memory database, calibrating its decision weights ($w_n$) for all future shopping cycles.
+
