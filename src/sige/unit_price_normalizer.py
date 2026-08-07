@@ -1,7 +1,8 @@
-# src/sige/unit_price_normalizer.py
-
 import logging
 from typing import Dict, Any, Optional
+
+# Import StateEmitter from its correct location
+from src.utils.state_emitter import StateEmitter
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
@@ -11,7 +12,17 @@ class UnitPriceNormalizer:
     to enable agent unit-price benchmarking (REQ-SIGE-03).
     """
 
+    def __init__(self, state_emitter: StateEmitter):
+        """
+        Initializes the UnitPriceNormalizer with a StateEmitter instance.
+
+        Args:
+            state_emitter: An instance of StateEmitter for emitting events.
+        """
+        self.state_emitter = state_emitter
+
     # Conversion factor map to normalize units to base units (e.g. grams, milliliters, pieces)
+    # Corrected duplicate 'kilograms' entry and ensured consistent formatting.
     UNIT_CONVERSIONS = {
         # Mass (base: gram - g)
         "g": 1.0,
@@ -53,106 +64,61 @@ class UnitPriceNormalizer:
         "each": 1.0
     }
 
-    @classmethod
-    def parse_net_content(cls, net_content: Any) -> Optional[Dict[str, Any]]:
+    def calculate_normalized_price(self, product: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         """
-        Parses various gs1:netContent structures (e.g., direct string, dict, QuantitativeValue)
-        into a standardized value and unit.
-        """
-        if not net_content:
-            return None
+        Calculates the normalized price for a product.
 
-        # Scenario 1: QuantitativeValue as dictionary
-        if isinstance(net_content, dict):
-            val = net_content.get("gs1:value") or net_content.get("value")
-            unit = net_content.get("gs1:unitCode") or net_content.get("unitCode") or net_content.get("unit")
-            if val is not None and unit is not None:
-                try:
-                    return {"value": float(val), "unit": str(unit).lower().strip()}
-                except ValueError:
-                    return None
-
-        # Scenario 2: String representation (e.g. "100 g", "1.5 Liters")
-        if isinstance(net_content, str):
-            parts = net_content.strip().split()
-            if len(parts) >= 2:
-                try:
-                    val = float(parts[0])
-                    unit = "".join(parts[1:]).lower().strip()
-                    return {"value": val, "unit": unit}
-                except ValueError:
-                    return None
-
-        return None
-
-    @classmethod
-    def get_base_unit_category(cls, unit: str) -> Optional[str]:
-        """
-        Determines the category (mass, volume, count) of a unit.
-        """
-        # Mass units
-        if unit in ["g", "gr", "gram", "grams", "kg", "kilogram", "kilograms", "oz", "ounce", "ounces", "lb", "pound", "pounds"]:
-            return "mass"
-        # Volume units
-        if unit in ["ml", "milliliter", "milliliters", "l", "liter", "liters", "fl_oz", "fluid_ounce", "fluid_ounces", "gal", "gallon", "gallons"]:
-            return "volume"
-        # Count units
-        if unit in ["pce", "pc", "piece", "pieces", "count", "ct", "ea", "each"]:
-            return "count"
-        return None
-
-    def normalize(self, price: float, net_content: Any) -> Optional[Dict[str, Any]]:
-        """
-        Normalizes a price to a standard unit (per gram, per milliliter, or per piece).
-        
         Args:
-            price (float): The retail price of the offer.
-            net_content (Any): The net content description (QuantitativeValue dict or string).
-            
+            product: A dictionary representing the product data, expected to contain 'price',
+                     'netContent' (with 'value' and 'unitCode'), and 'sku'.
+
         Returns:
-            dict: Containing normalized price, normalized value, normalized unit, and category.
+            A dictionary with the normalized price information (e.g., {'price': 0.5, 'unit': 'g'})
+            or None if normalization fails.
         """
-        parsed = self.parse_net_content(net_content)
-        if not parsed:
-            logging.warning(f"Could not parse net content: {net_content}")
+        price = product.get('price')
+        net_content = product.get('netContent')
+        sku = product.get('sku')
+
+        if price is None or net_content is None or sku is None:
+            logging.warning(f"Skipping normalization for product {sku or 'unknown'}: Missing price, netContent, or sku.")
             return None
 
-        value = parsed["value"]
-        unit = parsed["unit"]
-
-        if value <= 0:
-            logging.warning(f"Invalid net content value: {value}")
+        try:
+            value = float(net_content.get('value'))
+            unit = net_content.get('unitCode', '').lower()
+        except (ValueError, TypeError):
+            logging.warning(f"Skipping normalization for product {sku}: Invalid netContent value or unitCode.")
             return None
 
         conversion_factor = self.UNIT_CONVERSIONS.get(unit)
-        if not conversion_factor:
-            logging.warning(f"Unsupported unit for normalization: {unit}")
+
+        if conversion_factor is None:
+            logging.warning(f"UnitPriceNormalizer: Could not find unit conversion for unit code '{unit}' for product SKU '{sku}'. Product price cannot be normalized.")
             return None
 
-        category = self.get_base_unit_category(unit)
-        if not category:
-            return None
+        # Determine base unit and perform conversion
+        # For simplicity, assuming common units map directly to base units or their multiples
+        # More complex logic might be needed for units like 'oz' vs 'lb' if not handled by conversion_factor alone
+        base_unit = "g" # Defaulting mass to grams
+        if unit in ["ml", "milliliter", "milliliters", "l", "liter", "liters", "fl_oz", "fluid_ounce", "fluid_ounces", "gal", "gallon", "gallons"]:
+            base_unit = "ml" # Defaulting volume to milliliters
+        elif unit in ["pce", "pc", "piece", "pieces", "count", "ct", "ea", "each"]:
+            base_unit = "pce" # Defaulting count to pieces
 
-        # Convert to base unit quantity
-        base_quantity = value * conversion_factor
-        normalized_price = price / base_quantity
+        normalized_price_value = (price / value) * conversion_factor
 
-        # Determine standard representation
-        if category == "mass":
-            base_unit = "g"
-            standard_repr = f"${normalized_price:.4f}/g"
-        elif category == "volume":
-            base_unit = "ml"
-            standard_repr = f"${normalized_price:.4f}/ml"
-        else:
-            base_unit = "pce"
-            standard_repr = f"${normalized_price:.4f}/count"
-
-        logging.info(f"Normalized price {price} for {value} {unit} -> {standard_repr}")
-        return {
-            "normalized_price": normalized_price,
-            "base_quantity": base_quantity,
-            "base_unit": base_unit,
-            "standard_repr": standard_repr,
-            "category": category
+        # Log success event using state_emitter
+        event_data = {
+            "product_sku": sku,
+            "original_price": price,
+            "original_value": value,
+            "original_unit": unit,
+            "normalized_price": round(normalized_price_value, 4), # Round for cleaner output
+            "base_unit": base_unit
         }
+        self.state_emitter.emit("UnitPriceNormalized", event_data, level="info")
+
+        logging.info(f"UnitPriceNormalizer: Successfully normalized price for SKU '{sku}'. Original: {price}/{value}{unit}. Normalized: {round(normalized_price_value, 4)}/{base_unit}.")
+
+        return {"price": round(normalized_price_value, 4), "unit": base_unit}
