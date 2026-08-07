@@ -1,0 +1,9 @@
+{
+  "spend_limit": 1000.0,
+  "velocity_window": "daily",
+  "whitelist_domains": [
+    "organic-retail.com",
+    "trusted-merchant.com",
+    "brand.com"
+  ]
+}

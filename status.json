@@ -31,7 +31,7 @@
   "status": "INITIALIZING",
   "blueprint": {},
   "current_workflow_phase": "Executing Tasks",
-  "shutdown_requested": true,
+  "shutdown_requested": false,
   "reports": [
     {
       "status": "success",
