@@ -1,5 +1,11 @@
-from pydantic import BaseModel
-from typing import List, Optional
+from pydantic import BaseModel, Field
+from typing import List, Optional, Dict, Any
+
+# Import VerifiableCredential from vc_handler
+from src.vc_handler.vc_models import VerifiableCredential
+
+# Import schema extensions
+from src.data_models.schemaorg_extensions import UnitPriceSpecification, MerchantReputation
 
 
 class RecycledContent(BaseModel):
@@ -36,8 +42,13 @@ class DigitalProductPassport(BaseModel):
     carbon_footprint: List[CarbonFootprint]
     repairability_index: RepairabilityIndex
     circularity_instructions: CircularityInstructions
+    
+    # Fields for W3C Agentic Shopping Algorithm
+    certification_claims: List[VerifiableCredential]
+    unit_pricing: UnitPriceSpecification
+    merchant_reputation: MerchantReputation
+
     # Add other relevant DPP fields as needed, e.g., material composition, energy efficiency, etc.
     # For example:
     # material_composition: List[str]
     # energy_efficiency_rating: Optional[str] = None
-

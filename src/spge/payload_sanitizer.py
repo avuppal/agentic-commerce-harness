@@ -1,43 +1,35 @@
-# src/spge/payload_sanitizer.py
-
 import re
+from src.utils.state_emitter import StateEmitter # 1. Import
 
 class PayloadSanitizer:
     """Sanitizes structured data payloads to prevent indirect prompt injection attacks."""
 
     def __init__(self):
-        # Define a list of potentially harmful patterns or keywords.
-        # This is a starting point and can be expanded.
+        self.state_emitter = StateEmitter() # 2. Instantiate
         self.harmful_patterns = [
             r"ignore previous instructions",
             r"you are an attacker",
             r"system prompt override",
             r"execute command",
-            # Add more patterns as needed based on common injection techniques
         ]
-
-        # Compile regex for efficiency
         self.harmful_regex = re.compile('|'.join(self.harmful_patterns), re.IGNORECASE)
 
     def sanitize(self, payload):
-        """Recursively sanitizes a structured data payload.
-
-        Args:
-            payload: The data structure (dict, list, str, etc.) to sanitize.
-
-        Returns:
-            The sanitized payload.
-        """
+        """Recursively sanitizes a structured data payload."""
         if isinstance(payload, dict):
             return {key: self.sanitize(value) for key, value in payload.items()}
         elif isinstance(payload, list):
             return [self.sanitize(item) for item in payload]
         elif isinstance(payload, str):
-            # Sanitize string values
-            sanitized_string = self.harmful_regex.sub("[REDACTED]", payload)
-            # Further sanitization can be added here, e.g., escaping characters
-            return sanitized_string
+            if self.harmful_regex.search(payload):
+                # 3. Emit an event with relevant details
+                self.state_emitter.emit(
+                    "security.sanitization.redaction",
+                    {
+                        "original_payload": payload,
+                        "patterns_detected": self.harmful_regex.findall(payload)
+                    }
+                )
+            return self.harmful_regex.sub("[REDACTED]", payload)
         else:
-            # Return other data types as is
             return payload
-
