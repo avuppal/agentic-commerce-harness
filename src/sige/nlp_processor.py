@@ -1,3 +1,7 @@
+import os
+import json
+import logging
+
 class Tokenizer:
     """
     Placeholder for a tokenizer that breaks text into lemma tokens.
@@ -20,10 +24,44 @@ class SemanticVectorEmbedding:
 
 class IntentClassifier:
     """
-    Placeholder for an intent classifier.
-    This class identifies the user's intent and extracts structured data
-    like GPC category codes, hard constraints, and soft preferences.
+    Dynamic Intent Classifier mapping standard GS1 ontology/vocabularies from configuration files
+    rather than hard-coding them in Python logic.
     """
+    def __init__(self):
+        # Default fallback vocabulary mapping
+        self.vocabulary_map = {
+            "categories": {
+                "oat milk": "50160000",
+                "milk substitute": "50160000",
+                "strawberries": "50405020",
+                "strawberry": "50405020",
+                "cookie": "50130000",
+                "cookies": "50130000"
+            },
+            "hard_constraints": {
+                "gluten-free": {"attribute": "gs1:allergenInformation", "value": "FREE_FROM:Gluten"},
+                "gluten free": {"attribute": "gs1:allergenInformation", "value": "FREE_FROM:Gluten"},
+                "nut-free": {"attribute": "gs1:allergenInformation", "value": "FREE_FROM:Nuts"},
+                "nut free": {"attribute": "gs1:allergenInformation", "value": "FREE_FROM:Nuts"},
+                "sugar-free": {"attribute": "gs1:nutrientInformation", "value": "SUGAR_FREE"},
+                "sugar free": {"attribute": "gs1:nutrientInformation", "value": "SUGAR_FREE"}
+            },
+            "soft_preferences": {
+                "organic": "Organic",
+                "local": "Local"
+            }
+        }
+        
+        # Load from config directory if present
+        config_path = os.path.join(os.getcwd(), "config", "gs1_vocabulary_map.json")
+        if os.path.exists(config_path):
+            try:
+                with open(config_path, "r") as f:
+                    self.vocabulary_map = json.load(f)
+                logging.info("Successfully loaded dynamic GS1 vocabulary mapping from config.")
+            except Exception as e:
+                logging.warning(f"Failed to load dynamic GS1 vocabulary map, using default. Error: {e}")
+
     def classify(self, query: str) -> dict:
         structured_intent = {
             "gs1:gpcCategoryCode": None,
@@ -32,40 +70,28 @@ class IntentClassifier:
         }
         text_lower = query.lower()
 
-        # Extract GPC Category Code (simplified keyword matching)
-        if "oat milk" in text_lower or "milk substitute" in text_lower:
-            structured_intent["gs1:gpcCategoryCode"] = "50160000" # GPC for Milk/Milk Substitutes
-        elif "strawberries" in text_lower or "strawberry" in text_lower:
-            structured_intent["gs1:gpcCategoryCode"] = "50405020" # GPC for Strawberries
-        elif "cookie" in text_lower or "cookies" in text_lower:
-            structured_intent["gs1:gpcCategoryCode"] = "50130000" # GPC for Biscuits/Cookies
+        # 1. Dynamically match categories (GPC Brick Codes)
+        for keyword, category_code in self.vocabulary_map.get("categories", {}).items():
+            if keyword in text_lower:
+                structured_intent["gs1:gpcCategoryCode"] = category_code
+                break
 
-        # Extract Hard Constraints (Allergens & Nutrients)
-        if "gluten-free" in text_lower or "gluten free" in text_lower:
-            if "gs1:allergenInformation" not in structured_intent["hard_constraints"]:
-                structured_intent["hard_constraints"]["gs1:allergenInformation"] = []
-            if "FREE_FROM:Gluten" not in structured_intent["hard_constraints"]["gs1:allergenInformation"]:
-                structured_intent["hard_constraints"]["gs1:allergenInformation"].append("FREE_FROM:Gluten")
+        # 2. Dynamically match hard constraints (Allergens, Nutrients, Dietaries)
+        for keyword, spec in self.vocabulary_map.get("hard_constraints", {}).items():
+            if keyword in text_lower:
+                attr = spec.get("attribute")
+                val = spec.get("value")
+                if attr and val:
+                    if attr not in structured_intent["hard_constraints"]:
+                        structured_intent["hard_constraints"][attr] = []
+                    if val not in structured_intent["hard_constraints"][attr]:
+                        structured_intent["hard_constraints"][attr].append(val)
 
-        if "nut-free" in text_lower or "nut free" in text_lower:
-            if "gs1:allergenInformation" not in structured_intent["hard_constraints"]:
-                structured_intent["hard_constraints"]["gs1:allergenInformation"] = []
-            if "FREE_FROM:Nuts" not in structured_intent["hard_constraints"]["gs1:allergenInformation"]:
-                structured_intent["hard_constraints"]["gs1:allergenInformation"].append("FREE_FROM:Nuts")
-
-        if "sugar-free" in text_lower or "sugar free" in text_lower:
-            if "gs1:nutrientInformation" not in structured_intent["hard_constraints"]:
-                structured_intent["hard_constraints"]["gs1:nutrientInformation"] = []
-            if "SUGAR_FREE" not in structured_intent["hard_constraints"]["gs1:nutrientInformation"]:
-                structured_intent["hard_constraints"]["gs1:nutrientInformation"].append("SUGAR_FREE")
-
-        # Extract Soft Preferences (Claims & Locations)
-        if "organic" in text_lower:
-            if "Organic" not in structured_intent["soft_preferences"]:
-                structured_intent["soft_preferences"].append("Organic")
-        if "local" in text_lower:
-            if "Local" not in structured_intent["soft_preferences"]:
-                structured_intent["soft_preferences"].append("Local")
+        # 3. Dynamically match soft preferences (Claims, Origins, Brands)
+        for keyword, preference in self.vocabulary_map.get("soft_preferences", {}).items():
+            if keyword in text_lower:
+                if preference not in structured_intent["soft_preferences"]:
+                    structured_intent["soft_preferences"].append(preference)
 
         # Clean up empty lists/dicts if no constraints were found
         if not structured_intent["hard_constraints"]:

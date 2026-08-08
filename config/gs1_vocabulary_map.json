@@ -1,0 +1,43 @@
+{
+  "categories": {
+    "oat milk": "50160000",
+    "milk substitute": "50160000",
+    "strawberries": "50405020",
+    "strawberry": "50405020",
+    "cookie": "50130000",
+    "cookies": "50130000",
+    "pizza": "10000247",
+    "pizzas": "10000247"
+  },
+  "hard_constraints": {
+    "gluten-free": {
+      "attribute": "gs1:allergenInformation",
+      "value": "FREE_FROM:Gluten"
+    },
+    "gluten free": {
+      "attribute": "gs1:allergenInformation",
+      "value": "FREE_FROM:Gluten"
+    },
+    "nut-free": {
+      "attribute": "gs1:allergenInformation",
+      "value": "FREE_FROM:Nuts"
+    },
+    "nut free": {
+      "attribute": "gs1:allergenInformation",
+      "value": "FREE_FROM:Nuts"
+    },
+    "sugar-free": {
+      "attribute": "gs1:nutrientInformation",
+      "value": "SUGAR_FREE"
+    },
+    "sugar free": {
+      "attribute": "gs1:nutrientInformation",
+      "value": "SUGAR_FREE"
+    }
+  },
+  "soft_preferences": {
+    "organic": "Organic",
+    "local": "Local",
+    "vegetarian": "Vegetarian"
+  }
+}
