@@ -157,3 +157,10 @@ if __name__ == "__main__":
     offer = Offer(**offer_data)
     print("\n--- Offer JSON ---")
     print(offer.model_dump_json(indent=2))
+
+
+class StructuredIntentQuery(BaseModel):
+    gpc_category_code: Optional[str] = Field(None, alias="gpc_category_code")
+    hard_constraints: Dict[str, Any] = Field(default_factory=dict)
+    soft_preferences: List[str] = Field(default_factory=list)
+

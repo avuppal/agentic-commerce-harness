@@ -7,21 +7,16 @@ class Tokenizer:
     def process(self, text: str) -> list[str]:
         # Basic tokenization: split by whitespace and convert to lowercase
         tokens = text.lower().split()
-        # In a real scenario, lemmatization would happen here.
-        # For now, we return the split words as tokens.
         return tokens
 
 class SemanticVectorEmbedding:
     """
     Placeholder for a semantic vector embedding model.
-    This class would typically use a pre-trained model (e.g., Word2Vec, GloVe, Sentence-BERT)
-    to convert tokens or sentences into dense vector representations.
+    This class would typically use a pre-trained model to convert tokens or sentences
+    into dense vector representations.
     """
     def embed(self, tokens: list[str]) -> list[float]:
-        # In a real implementation, this would return a numerical vector.
-        # For this placeholder, we can return a dummy list or raise NotImplementedError.
-        # For now, returning a dummy based on token count.
-        return [float(len(tokens) * 0.1)] * 10 # Dummy embedding of size 10
+        return [float(len(tokens) * 0.1)] * 10
 
 class IntentClassifier:
     """
@@ -40,21 +35,37 @@ class IntentClassifier:
         # Extract GPC Category Code (simplified keyword matching)
         if "oat milk" in text_lower or "milk substitute" in text_lower:
             structured_intent["gs1:gpcCategoryCode"] = "50160000" # GPC for Milk/Milk Substitutes
+        elif "strawberries" in text_lower or "strawberry" in text_lower:
+            structured_intent["gs1:gpcCategoryCode"] = "50405020" # GPC for Strawberries
+        elif "cookie" in text_lower or "cookies" in text_lower:
+            structured_intent["gs1:gpcCategoryCode"] = "50130000" # GPC for Biscuits/Cookies
 
-        # Extract Hard Constraints (Allergens)
-        if "gluten-free" in text_lower:
+        # Extract Hard Constraints (Allergens & Nutrients)
+        if "gluten-free" in text_lower or "gluten free" in text_lower:
             if "gs1:allergenInformation" not in structured_intent["hard_constraints"]:
                 structured_intent["hard_constraints"]["gs1:allergenInformation"] = []
-            # Ensure it's a list before appending if the key already exists with a non-list value
-            if not isinstance(structured_intent["hard_constraints"]["gs1:allergenInformation"], list):
-                 structured_intent["hard_constraints"]["gs1:allergenInformation"] = []
             if "FREE_FROM:Gluten" not in structured_intent["hard_constraints"]["gs1:allergenInformation"]:
                 structured_intent["hard_constraints"]["gs1:allergenInformation"].append("FREE_FROM:Gluten")
 
-        # Extract Soft Preferences (Claims)
+        if "nut-free" in text_lower or "nut free" in text_lower:
+            if "gs1:allergenInformation" not in structured_intent["hard_constraints"]:
+                structured_intent["hard_constraints"]["gs1:allergenInformation"] = []
+            if "FREE_FROM:Nuts" not in structured_intent["hard_constraints"]["gs1:allergenInformation"]:
+                structured_intent["hard_constraints"]["gs1:allergenInformation"].append("FREE_FROM:Nuts")
+
+        if "sugar-free" in text_lower or "sugar free" in text_lower:
+            if "gs1:nutrientInformation" not in structured_intent["hard_constraints"]:
+                structured_intent["hard_constraints"]["gs1:nutrientInformation"] = []
+            if "SUGAR_FREE" not in structured_intent["hard_constraints"]["gs1:nutrientInformation"]:
+                structured_intent["hard_constraints"]["gs1:nutrientInformation"].append("SUGAR_FREE")
+
+        # Extract Soft Preferences (Claims & Locations)
         if "organic" in text_lower:
             if "Organic" not in structured_intent["soft_preferences"]:
                 structured_intent["soft_preferences"].append("Organic")
+        if "local" in text_lower:
+            if "Local" not in structured_intent["soft_preferences"]:
+                structured_intent["soft_preferences"].append("Local")
 
         # Clean up empty lists/dicts if no constraints were found
         if not structured_intent["hard_constraints"]:
@@ -81,23 +92,12 @@ def process_query(query: str) -> dict:
     embedder = SemanticVectorEmbedding()
     classifier = IntentClassifier()
 
-    # Stage 1: Tokenization
     tokens = tokenizer.process(query)
-
-    # Stage 2: Semantic Vector Embedding
-    # The embedding is not directly used by the current placeholder classifier
-    # but is part of the pipeline as per the PRD.
     embedding = embedder.embed(tokens)
-
-    # Stage 3: Intent Classification
-    # The placeholder classifier uses the raw query text for simplicity.
-    # In a real implementation, it would leverage the 'embedding'.
     intent = classifier.classify(query)
 
-    # The final output should align with the structure expected by downstream systems.
-    # Ensure the output matches the expected schema, including the case where no
-    # constraints are found.
-    
-    # The `IntentClassifier.classify` method already handles ensuring all keys exist.
-    # We just need to return its result.
     return intent
+
+class NLPProcessor:
+    def process(self, query: str) -> dict:
+        return process_query(query)

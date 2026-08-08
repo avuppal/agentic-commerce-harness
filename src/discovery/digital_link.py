@@ -37,3 +37,62 @@ class DigitalLinkParser:
                 gs1_data[key] = value_list[0]
                 
         return gs1_data
+
+
+class DigitalLink:
+    def __init__(self, uri: str):
+        self.uri = uri
+        self.parser = DigitalLinkParser()
+
+    def parse(self) -> dict:
+        """
+        Parses the URI and returns a normalized dictionary of extracted Application Identifiers.
+        To support clients expecting both standard GS1 AI codes ('01', '10', '21') and friendly keys
+        ('gtin', 'batch', 'serial'), we provide both mapping representations.
+        """
+        raw_components = self.parser.parse_uri(self.uri)
+        normalized = {}
+        if not raw_components:
+            return normalized
+
+        # Map standard GS1 AI keys to friendly names for ease of use
+        if '01' in raw_components:
+            normalized['gtin'] = raw_components['01']
+        if '10' in raw_components:
+            normalized['batch'] = raw_components['10']
+        if '21' in raw_components:
+            normalized['serial'] = raw_components['21']
+            
+        # Keep original numeric keys for standard compliance
+        for k, v in raw_components.items():
+            normalized[k] = v
+            
+        return normalized
+
+    def route(self) -> dict:
+        """
+        Determines the redirection paths and acceptable content negotiation headers
+        for standard relationship types (gs1:pip, gs1:dpp, gs1:certificationInfo)
+        as defined in docs/discovery/digital_link.md.
+        """
+        parsed = self.parse()
+        gtin = parsed.get("gtin") or parsed.get("01") or "unknown"
+        
+        # Parse URI to construct domain-specific base URLs dynamically
+        parsed_uri = urlparse(self.uri)
+        domain = parsed_uri.netloc or "id.brand.com"
+        scheme = parsed_uri.scheme or "https"
+        base_url = f"{scheme}://{domain}/01/{gtin}"
+        
+        return {
+            "acceptable_headers": [
+                "application/ld+json",
+                "application/vc+ld+json",
+                "text/html"
+            ],
+            "redirection_links": {
+                "gs1:pip": f"{base_url}/info",
+                "gs1:dpp": f"{base_url}/dpp",
+                "gs1:certificationInfo": f"{base_url}/certinfo"
+            }
+        }

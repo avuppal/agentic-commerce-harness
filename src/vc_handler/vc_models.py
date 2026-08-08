@@ -16,9 +16,10 @@ class Issuer(BaseModel):
 class Proof(BaseModel):
     type: str
     created: str
-    proof_purpose: str = Field(..., alias="proofPurpose")
+    proof_purpose: Optional[str] = Field(None, alias="proofPurpose")
     verification_method: str = Field(..., alias="verificationMethod")
-    proof_value: str = Field(..., alias="proofValue")
+    proof_value: Optional[str] = Field(None, alias="proofValue")
+    jws: Optional[str] = None
 
     model_config = {
         "populate_by_name": True,

@@ -39,7 +39,8 @@ class VerifiableCredentialValidator:
         logging.info(f"Verifying signature with method {proof.verification_method} using type {proof.type}")
         # In a production environment, we would use a library like jwcrypto or cryptography.
         # For the prototype, we verify that the proof has a signature value.
-        if proof.proof_value and len(proof.proof_value) > 10:
+        sig = proof.proof_value or proof.jws
+        if sig and len(sig) > 10:
             logging.info("Cryptographic signature verified successfully.")
             return True
         logging.warning("Cryptographic signature verification failed: invalid or empty proof value.")
@@ -79,8 +80,12 @@ class VerifiableCredentialValidator:
             logging.info(f"Validating VC ID: {credential.id}")
 
             # 2. Extract Claim Issuer DID
-            issuer_did = credential.issuer.id
-            if not issuer_did.startswith("did:"):
+            if isinstance(credential.issuer, str):
+                issuer_did = credential.issuer
+            else:
+                issuer_did = credential.issuer.id
+
+            if not issuer_did or not issuer_did.startswith("did:"):
                 logging.warning(f"Rejecting credential: Issuer ID {issuer_did} is not a valid DID.")
                 return "CLAIM_REJECTED"
 
@@ -100,3 +105,34 @@ class VerifiableCredentialValidator:
         except Exception as e:
             logging.error(f"Error validating Verifiable Credential: {e}")
             return "CLAIM_REJECTED"
+
+    def validate_claims(self, product_data: Dict[str, Any]) -> int:
+        """
+        Validates claims inside a product payload based on attached Verifiable Credentials.
+        Returns:
+            1 (CLAIM_VERIFIED) if at least one VC is attached and all attached VCs are valid.
+            0 (CLAIM_REJECTED) if no VCs are attached or if any VC is rejected.
+            -1 (CLAIM_REVOKED) if any attached VC has been revoked.
+        """
+        vcs = product_data.get("vcs")
+        if not vcs or not isinstance(vcs, list):
+            logging.warning("No VCs attached to product data.")
+            return 0  # CLAIM_REJECTED
+
+        revoked_found = False
+        verified_found = False
+
+        for vc_data in vcs:
+            status = self.validate(vc_data)
+            if status == "CLAIM_REVOKED":
+                revoked_found = True
+            elif status == "CLAIM_REJECTED":
+                return 0  # Any rejection immediately rejects
+            elif status == "CLAIM_VERIFIED":
+                verified_found = True
+
+        if revoked_found:
+            return -1  # CLAIM_REVOKED
+        if verified_found:
+            return 1  # CLAIM_VERIFIED
+        return 0  # CLAIM_REJECTED

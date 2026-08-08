@@ -115,6 +115,32 @@ python3 -m unittest discover -s tests/benchmarks -p "*_benchmark.py"
 
 ---
 
+## 🤖 LLM Agent Integration & API Keys
+
+The Digital Commerce Harness is designed to be **100% self-contained, keyless, and secure**. The container itself runs locally and does not store, request, or manage any external LLM provider keys (e.g., Gemini, OpenAI, Claude). This guarantees zero credential-leak risks in your container environments.
+
+Your choice of LLM provider, keys, and model orchestration stays entirely on your **host machine / caller client** (using libraries like LangChain, LlamaIndex, or native SDKs). 
+
+### How to Connect an LLM to the Harness via MCP:
+The harness exposes standardized **Model Context Protocol (MCP)** tools at `http://localhost:8000/mcp/tools`. 
+
+You can configure any MCP-enabled LLM agent or desktop client (like Claude Desktop) to connect directly:
+
+```json
+{
+  "mcpServers": {
+    "commerce-harness": {
+      "command": "docker",
+      "args": ["run", "-i", "--rm", "-p", "8000:8000", "commerce-harness"]
+    }
+  }
+}
+```
+
+The model automatically discovers and uses local, deterministic tools (like `resolveDigitalLink`, `normalizeUnitPrice`, and `verifyCredential`) under the hood to ensure correct reasoning without hallucination.
+
+---
+
 ## 🏆 Multi-Modal Shopping Evaluation & NPS
 
 We have implemented a deterministic evaluation simulator to benchmark the Harness against traditional baseline shopping modalities (Manual Human vs. Ungrounded Chat Scrapers).
