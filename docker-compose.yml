@@ -9,3 +9,15 @@ services:
     environment:
       - PYTHONUNBUFFERED=1
     restart: always
+
+  frontend:
+    build: ./frontend
+    container_name: commerce-harness-ui
+    ports:
+      - "3000:3000"
+    environment:
+      - NEXT_PUBLIC_API_URL=http://localhost:8000
+    depends_on:
+      - harness
+    restart: always
+
