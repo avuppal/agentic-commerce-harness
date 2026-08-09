@@ -11,6 +11,7 @@ class PayloadSanitizer:
             r"you are an attacker",
             r"system prompt override",
             r"execute command",
+            r"drop table"
         ]
         self.harmful_regex = re.compile('|'.join(self.harmful_patterns), re.IGNORECASE)
 

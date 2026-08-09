@@ -1,8 +1,21 @@
-fastapi>=0.100.0
-uvicorn>=0.20.0
-pydantic>=2.0
-rdflib>=6.0.0
-pyld>=2.0.0
+# Web Framework
+fastapi
+uvicorn[standard]
 
+# HTTP Client
+requests
+
+# Vector Database & Embeddings
 chromadb
+sentence-transformers
+
+# W3C Standards (DID/VC)
 pydid
+jwcrypto
+
+# Testing
+pytest
+
+stripe
+psycopg2-binary
+python-jose

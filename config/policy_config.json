@@ -1,9 +1,8 @@
 {
-  "spend_limit": 1000.0,
-  "velocity_window": "daily",
-  "whitelist_domains": [
-    "organic-retail.com",
-    "trusted-merchant.com",
-    "brand.com"
-  ]
+  "vc_validation_policy": {
+    "trusted_vc_issuers": [
+      "did:key:z6MkpTHR8VNsBxR",
+      "did:web:certification-body.org"
+    ]
+  }
 }

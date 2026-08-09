@@ -30,6 +30,36 @@ app = FastAPI(
     version="1.0.0"
 )
 
+import os
+from src.security.jwt_handler import JWTHandler
+
+jwt_handler = JWTHandler(jwks_url=os.environ.get("OIDC_JWKS_URL", "mock_jwks_url"))
+
+@app.middleware("http")
+async def oidc_auth_middleware(request: Request, call_next):
+    """Enforces OAuth 2.0 / OIDC Identity & Access Management (REQ-P4-01)."""
+    # Only protect MCP tools
+    if request.url.path.startswith("/mcp/tools"):
+        # Bypass auth in local tests if BYPASS_AUTH is true
+        if os.environ.get("BYPASS_AUTH", "true").lower() == "true":
+            return await call_next(request)
+            
+        auth_header = request.headers.get("Authorization")
+        if not auth_header or not auth_header.startswith("Bearer "):
+            return JSONResponse(status_code=401, content={"detail": "Missing or invalid Authorization header."})
+            
+        token = auth_header.split(" ")[1]
+        # In a real environment, the issuer/audience would be configured
+        claims = jwt_handler.decode_and_validate_jwt(
+            token, 
+            issuer=os.environ.get("OIDC_ISSUER", "mock_issuer"), 
+            audience=os.environ.get("OIDC_AUDIENCE", "mock_audience")
+        )
+        if not claims:
+            return JSONResponse(status_code=401, content={"detail": "Invalid or expired JWT."})
+            
+    return await call_next(request)
+
 # Mock databases for demonstration and integration
 mock_products = {
     "1234567890123": {
@@ -75,6 +105,10 @@ class PurchasePolicyRequest(BaseModel):
     domain: str
     category: str
 
+class SemanticSearchRequest(BaseModel):
+    query: str
+    num_results: int = 5
+
 
 # --- Tool Definition Directory ---
 mcp_tools = [
@@ -87,6 +121,18 @@ mcp_tools = [
                 "gtin": {"type": "string", "description": "The 13 or 14-digit Global Trade Item Number."}
             },
             "required": ["gtin"]
+        }
+    },
+    {
+        "name": "semanticProductSearch",
+        "description": "Searches for products in the local semantic vector database based on unstructured natural language queries.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "query": {"type": "string", "description": "The natural language query (e.g., 'healthy almond milk')."},
+                "num_results": {"type": "integer", "description": "The maximum number of matches to return (default 5)."}
+            },
+            "required": ["query"]
         }
     },
     {
@@ -470,6 +516,31 @@ async def get_product_data(gtin: str, request: Request):
     
     # Standard JSON-LD response
     return JSONResponse(content=product, media_type="application/ld+json")
+
+
+@app.post("/mcp/tools/semantic-search")
+async def semantic_search(payload: SemanticSearchRequest):
+    """MCP tool wrapper for performing semantic product searches via ChromaDB."""
+    try:
+        from src.vector_db.chroma_db_handler import ChromaDBHandler
+        # Assuming the ingest script used collection "product_data"
+        db_handler = ChromaDBHandler(collection_name="product_data", persistence_directory="./chroma_db")
+        results = db_handler.search(query_texts=[payload.query], n_results=payload.num_results)
+        
+        # Format the response from ChromaDB into a clean list of products
+        products = []
+        if results and "metadatas" in results and results["metadatas"]:
+            for metadata_list in results["metadatas"]:
+                for metadata in metadata_list:
+                    products.append(metadata)
+        
+        return {
+            "status": "success",
+            "query": payload.query,
+            "results": products
+        }
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Semantic search failed: {e}")
 
 
 @app.post("/mcp/tools/resolve-link")

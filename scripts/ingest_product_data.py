@@ -105,6 +105,53 @@ class ChromaDBHandler:
             logging.error(f"Error adding products to ChromaDB: {e}")
             logging.error("Please check if IDs are unique and data formats are correct.")
 
+import requests
+
+def fetch_live_retailer_data() -> List[Dict[str, Any]]:
+    """
+    Queries a live simulated retailer API (FakeStore API) and translates its
+    proprietary product schema into standard GS1 JSON-LD representations.
+    """
+    logging.info("Fetching live product data from retailer API...")
+    url = "https://fakestoreapi.com/products"
+    try:
+        response = requests.get(url, timeout=15)
+        response.raise_for_status()
+        retailer_products = response.json()
+    except Exception as e:
+        logging.error(f"Failed to fetch live data from {url}: {e}")
+        return []
+
+    gs1_products = []
+    for item in retailer_products:
+        # Proprietary to GS1 Schema Translation
+        gs1_product = {
+            "@context": [
+                "http://schema.org/",
+                "https://www.gs1.org/voc/",
+                {"@vocab": "http://schema.org/"}
+            ],
+            "@type": "Product",
+            "gtin": f"00000000{item.get('id', 0):05d}", # Simulated GTIN
+            "name": item.get('title', 'Unknown Product'),
+            "description": item.get('description', ''),
+            "brand": {"@type": "Organization", "name": "FakeStoreRetail"},
+            "offers": {
+                "@type": "Offer",
+                "priceCurrency": "USD",
+                "price": str(item.get('price', '0.00')),
+                "availability": "https://schema.org/InStock",
+                "seller": {"@type": "Organization", "name": "FakeStore"}
+            },
+            "gpcCategoryCode": "10000000", # Generic GPC
+            "netContent": {"@type": "QuantitativeValue", "value": 1, "unitCode": "EA"},
+            "countryOfOrigin": "US"
+        }
+        gs1_products.append(gs1_product)
+        
+    logging.info(f"Successfully fetched and translated {len(gs1_products)} products to GS1 schema.")
+    return gs1_products
+
 # --- Data Generation Functions ---
 def load_sample_product_data(num_samples: int = 100) -> List[Dict[str, Any]]:
     """
@@ -252,8 +299,13 @@ def main():
         logging.error(f"Critical error: Could not initialize ChromaDBHandler. Exiting. Details: {e}")
         return
 
-    # Load sample product data
-    product_data = load_sample_product_data(num_samples=NUM_SAMPLES_TO_INGEST)
+    # Load live product data
+    product_data = fetch_live_retailer_data()
+    
+    # Fallback to generated samples if live fetch failed or returned empty
+    if not product_data:
+        logging.info("Falling back to simulated product data generation...")
+        product_data = load_sample_product_data(num_samples=NUM_SAMPLES_TO_INGEST)
     
     if product_data:
         # Add products to ChromaDB
