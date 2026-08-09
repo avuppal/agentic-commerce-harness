@@ -705,3 +705,140 @@ async def check_policy(payload: PurchasePolicyRequest):
         }
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Policy enforcement evaluation failed: {e}")
+
+class AgentShopRequest(BaseModel):
+    prompt: str
+
+@app.post("/api/agent/shop")
+async def api_agent_shop(request: AgentShopRequest):
+    """Simulates an LLM agent sending a shopping request and receiving an approval challenge."""
+    from src.sige.query_engine import QueryEngine
+    from src.vc_handler.vc_validator import VerifiableCredentialValidator
+    from src.sige.unit_price_normalizer import UnitPriceNormalizer
+    from src.approval_manager.approval_trigger import ApprovalTrigger
+    from src.payments.token_handler import TokenHandler
+    from src.utils.state_emitter import StateEmitter
+    import logging
+    
+    prompt = request.prompt
+    domain = "organic-retail.com"
+    if "walmart.ca" in prompt.lower():
+        domain = "walmart.ca"
+
+    query_engine = QueryEngine()
+    structured_query = query_engine.create_structured_query(prompt)
+    
+    # Minimal mock catalog just to get something through
+    mock_catalog = [
+        {
+            "sku": "ORGANIC-OAT-MILK-101",
+            "name": "Organic Pure Oat Milk",
+            "price": 3.99,
+            "netContent": {"value": 946, "unitCode": "ml"},
+            "allergens": ["None"],
+            "claims": ["Organic", "Vegetarian", "Gluten-Free"],
+            "vcs": [{
+                "@context": ["https://www.w3.org/2018/credentials/v1"],
+                "type": ["VerifiableCredential", "ProductCertificationCredential"],
+                "issuer": "did:key:z6MkpTHR8VNsBxR",
+                "issuance_date": "2026-08-01T12:00:00Z",
+                "credential_subject": {
+                    "@id": "urn:product:ORGANIC-OAT-MILK-101",
+                    "certificationName": "USDA Organic Certification",
+                    "certificationStatus": "verified"
+                },
+                "proof": {
+                    "type": "Ed25519Signature2020",
+                    "created": "2026-08-01T12:05:00Z",
+                    "verificationMethod": "did:key:z6MkpTHR8VNsBxR#key-1",
+                    "jws": "fake_signature_for_oat_milk"
+                }
+            }]
+        },
+        {
+            "sku": "ORGANIC-STRAWBERRIES-102",
+            "name": "Organic Vine Strawberries",
+            "price": 4.49,
+            "netContent": {"value": 454, "unitCode": "g"},
+            "allergens": ["None"],
+            "claims": ["Organic", "Vegetarian"],
+            "vcs": [{
+                "@context": ["https://www.w3.org/2018/credentials/v1"],
+                "type": ["VerifiableCredential", "ProductCertificationCredential"],
+                "issuer": "did:key:z6MkpTHR8VNsBxR",
+                "issuance_date": "2026-08-01T12:00:00Z",
+                "credential_subject": {
+                    "@id": "urn:product:ORGANIC-STRAWBERRIES-102",
+                    "certificationName": "FairTrade Organic Strawberry",
+                    "certificationStatus": "verified"
+                },
+                "proof": {
+                    "type": "Ed25519Signature2020",
+                    "created": "2026-08-01T12:05:00Z",
+                    "verificationMethod": "did:key:z6MkpTHR8VNsBxR#key-1",
+                    "jws": "fake_signature_for_strawberries"
+                }
+            }]
+        }
+    ]
+
+    selected_ingredients = []
+    total_cost = 0.0
+    all_claims_verified = True
+    
+    required_allergens = structured_query.hard_constraints.get("gs1:allergenInformation", [])
+    required_preferences = structured_query.soft_preferences
+
+    validator = VerifiableCredentialValidator()
+    emitter = StateEmitter()
+    normalizer = UnitPriceNormalizer(emitter)
+
+    for item in mock_catalog:
+        if "Organic" in required_preferences and "Organic" not in item["claims"]:
+            continue
+        if "Vegetarian" in required_preferences and "Vegetarian" not in item["claims"]:
+            continue
+        if "FREE_FROM:Gluten" in required_allergens and "Gluten-Free" not in item["claims"]:
+            continue
+
+        claim_status = validator.validate_claims(item)
+        if claim_status != 1:
+            all_claims_verified = False
+
+        normalized = normalizer.calculate_normalized_price(item)
+        selected_ingredients.append(item)
+        total_cost += item["price"]
+
+    # Threshold set low to force approval check for demo
+    approval_config = {
+        'cost_threshold': 5.00,  
+        'min_claim_verification_score': 100.0,
+        'unverified_domains': ['untrusted-merchant.com']
+    }
+    
+    trigger = ApprovalTrigger(approval_config)
+    requires_approval = trigger.should_trigger_approval(
+        order_cost=total_cost,
+        claim_verification_score=100.0 if all_claims_verified else 0.0,
+        domain=domain,
+        session_id="chat_session",
+        cart_data={"ingredients": [item["name"] for item in selected_ingredients]}
+    )
+    
+    # Fetch the latest pending approval to get the order ID (hacky but works for demo)
+    from src.utils.db_handler import get_all_pending_approvals
+    order_id = None
+    if requires_approval:
+        approvals = get_all_pending_approvals()
+        if approvals:
+            # Get the most recent one
+            order_id = max(approvals, key=lambda x: x["order_id"])["order_id"]
+
+    return {
+        "status": "success",
+        "prompt": prompt,
+        "cart_total": total_cost,
+        "items": [item["name"] for item in selected_ingredients],
+        "requires_approval": requires_approval,
+        "order_id": order_id
+    }
