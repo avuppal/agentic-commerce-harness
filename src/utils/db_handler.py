@@ -126,6 +126,43 @@ def get_pending_approval(order_id: int):
             conn.close()
     return order
 
+def get_all_pending_approvals() -> list:
+    """Retrieves all pending approvals from the database."""
+    conn = None
+    cur = None
+    orders = []
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        
+        select_query = """
+        SELECT order_id, session_id, cart_data, order_cost, claim_verification_score, status, created_at, updated_at
+        FROM pending_approvals WHERE status = 'PENDING_HUMAN_APPROVAL';
+        """
+        
+        cur.execute(select_query)
+        rows = cur.fetchall()
+        
+        for row in rows:
+            orders.append({
+                "order_id": row[0],
+                "session_id": row[1],
+                "cart_data": row[2],
+                "order_cost": float(row[3]),
+                "claim_verification_score": float(row[4]),
+                "status": row[5],
+                "created_at": row[6].isoformat() if row[6] else None,
+                "updated_at": row[7].isoformat() if row[7] else None
+            })
+    except Exception as e:
+        logger.error(f"Failed to retrieve pending approvals: {e}")
+    finally:
+        if cur:
+            cur.close()
+        if conn:
+            conn.close()
+    return orders
+
 def update_approval_status(order_id: int, status: str):
     """Updates the status of a pending approval."""
     conn = None

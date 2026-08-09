@@ -603,6 +603,78 @@ async def sanitize_text(payload: SanitizeRequest):
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Sanitization failed: {e}")
 
+# --- Admin Human UI Portal Endpoints ---
+
+class ApprovalDecisionRequest(BaseModel):
+    decision: str  # "approve" or "reject"
+    notes: Optional[str] = None
+    domain: str = "organic-retail.com"
+
+@app.get("/admin/approvals")
+async def get_pending_approvals():
+    """Retrieves all shopping carts suspended pending human review."""
+    from src.utils.db_handler import get_all_pending_approvals
+    try:
+        approvals = get_all_pending_approvals()
+        return {"status": "success", "approvals": approvals}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to fetch approvals: {e}")
+
+@app.get("/admin/approvals/{order_id}")
+async def get_approval_detail(order_id: int):
+    """Retrieves the full JSONB payload for a specific suspended cart."""
+    from src.utils.db_handler import get_pending_approval
+    try:
+        approval = get_pending_approval(order_id)
+        if not approval:
+            raise HTTPException(status_code=404, detail="Order not found")
+        return {"status": "success", "approval": approval}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to fetch approval {order_id}: {e}")
+
+@app.post("/admin/approvals/{order_id}/decision")
+async def submit_approval_decision(order_id: int, payload: ApprovalDecisionRequest):
+    """Submits a human decision for a suspended cart. If approved, mints a Stripe VCC."""
+    from src.utils.db_handler import update_approval_status, get_pending_approval
+    from src.payments.token_handler import TokenHandler
+    
+    try:
+        order = get_pending_approval(order_id)
+        if not order:
+            raise HTTPException(status_code=404, detail="Order not found")
+            
+        if order["status"] != "PENDING_HUMAN_APPROVAL":
+            raise HTTPException(status_code=400, detail=f"Order is already processed: {order['status']}")
+
+        decision = payload.decision.lower()
+        if decision == "approve":
+            # Mint Stripe VCC
+            token_handler = TokenHandler()
+            vcc_id = token_handler.generate_token({"amount": order["order_cost"], "domain": payload.domain})
+            
+            update_approval_status(order_id, "APPROVED")
+            
+            return {
+                "status": "success", 
+                "message": "Cart approved and VCC generated.",
+                "vcc_id": vcc_id
+            }
+        elif decision == "reject":
+            update_approval_status(order_id, "REJECTED")
+            return {
+                "status": "success",
+                "message": "Cart rejected. Agent thread terminated."
+            }
+        else:
+            raise HTTPException(status_code=400, detail="Decision must be 'approve' or 'reject'")
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to process decision: {e}")
+
 
 @app.post("/mcp/tools/check-policy")
 async def check_policy(payload: PurchasePolicyRequest):
